@@ -1,0 +1,19 @@
+{
+    "name": "groundskeeper",
+    "scripts": {
+      "build": "tsc",
+      "watch": "tsc -w",
+      "cdk": "cdk",
+      "deploy:dev": "cdk deploy --context env=dev",
+      "deploy:prod": "cdk deploy --context env=prod"
+    },
+    "dependencies": {
+      "aws-cdk-lib": "^2.100.0",
+      "constructs": "^10.0.0"
+    },
+    "devDependencies": {
+      "ts-node": "^10.0.0",
+      "typescript": "^4.9.5"
+    }
+  }
+  
