@@ -5,24 +5,35 @@ import { SharedInfraStack } from "../lib/shared-stack";
 import { UsainStack } from "../lib/usain-stack";
 
 const app = new cdk.App();
+const envName = app.node.tryGetContext("env") ?? "dev";
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: process.env.CDK_DEFAULT_REGION,
+};
 
-const env = app.node.tryGetContext("env") || "dev";
-
-const shared = new SharedInfraStack(app, `SharedInfra-${env}`, {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+// ── Shared core infra ─────────────────────────────────────────
+const shared = new SharedInfraStack(app, `SharedInfra-${envName}`, {
+  envName,
+  env,
 });
 
-new DojoStack(app, `DojoStack-${env}`, {
+// ── Dojo (Lambda) stack ───────────────────────────────────────
+new DojoStack(app, `DojoStack-${envName}`, {
+  envName,
   vpc: shared.vpc,
+  queue: shared.trainingQueue,
   dbSecret: shared.dbSecret,
-  envName: env,
+  lambdaSg: shared.lambdaSg,
+  env,
 });
 
-new UsainStack(app, `UsainStack-${env}`, {
+// ── Usain (Express ECS) stack ─────────────────────────────────
+new UsainStack(app, `UsainStack-${envName}`, {
+  envName,
   vpc: shared.vpc,
+  queue: shared.trainingQueue,
   dbSecret: shared.dbSecret,
-  envName: env,
+  userPicsBucket: shared.userPicsBucket,
+  appSg: shared.appSg,
+  env,
 });
