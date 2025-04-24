@@ -10,8 +10,8 @@
         "deploy:shared:dev": "cdk deploy SharedInfra-dev --require-approval never --context env=dev",
         "deploy:shared:prod": "cdk deploy SharedInfra-prod --require-approval never --context env=prod",
 
-        "deploy:dev": "cdk deploy --context env=dev",
-        "deploy:prod": "cdk deploy --context env=prod"
+        "deploy:dev": "cdk deploy --context env=dev --all",
+        "deploy:prod": "cdk deploy --context env=prod --all"
     },
     "dependencies": {
         "@aws-cdk/aws-ec2": "^1.37.0",
