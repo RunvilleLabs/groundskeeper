@@ -93,9 +93,10 @@ export class UsainStack extends Stack {
     const service = new FargateService(this, `${prefix}Service-${env}`, {
       cluster,
       taskDefinition: taskDef,
-      desiredCount: 1,
+      desiredCount: 0,
       assignPublicIp: false,
       securityGroups: [props.appSg],
+      circuitBreaker: { rollback: true },
     });
 
     const scaling = service.autoScaleTaskCount({ maxCapacity: 4 });
