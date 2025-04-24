@@ -29,6 +29,7 @@ export interface UsainStackProps extends StackProps {
   dbSecret: Secret;
   userPicsBucket: Bucket;
   appSg: SecurityGroup;
+  albSg: SecurityGroup;
 }
 
 export class UsainStack extends Stack {
@@ -92,9 +93,10 @@ export class UsainStack extends Stack {
     const service = new FargateService(this, `${prefix}Service-${env}`, {
       cluster,
       taskDefinition: taskDef,
-      desiredCount: 1,
+      desiredCount: 0,
       assignPublicIp: false,
       securityGroups: [props.appSg],
+      circuitBreaker: { rollback: true },
     });
 
     const scaling = service.autoScaleTaskCount({ maxCapacity: 4 });
@@ -117,16 +119,10 @@ export class UsainStack extends Stack {
     service: FargateService,
     props: UsainStackProps
   ) {
-    const albSg = new SecurityGroup(this, `${prefix}AlbSg-${env}`, {
-      vpc: props.vpc,
-    });
-    albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80));
-    props.appSg.addIngressRule(albSg, Port.tcp(3000), "ALB → App");
-
     const alb = new elbv2.ApplicationLoadBalancer(this, `${prefix}Alb-${env}`, {
       vpc: props.vpc,
       internetFacing: true,
-      securityGroup: albSg,
+      securityGroup: props.albSg,
     });
 
     const listener = alb.addListener("Http", { port: 80, open: true });

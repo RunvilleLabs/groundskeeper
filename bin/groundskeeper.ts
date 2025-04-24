@@ -24,6 +24,7 @@ new DojoStack(app, `DojoStack-${envName}`, {
   queue: shared.trainingQueue,
   dbSecret: shared.dbSecret,
   lambdaSg: shared.lambdaSg,
+  codeBucket: shared.codeBucket,
   env,
 });
 
@@ -35,5 +36,6 @@ new UsainStack(app, `UsainStack-${envName}`, {
   dbSecret: shared.dbSecret,
   userPicsBucket: shared.userPicsBucket,
   appSg: shared.appSg,
+  albSg: shared.albSg,
   env,
 });

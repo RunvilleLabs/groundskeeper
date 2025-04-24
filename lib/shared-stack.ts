@@ -1,5 +1,5 @@
 import * as iam from "aws-cdk-lib/aws-iam";
-
+import * as cr from 'aws-cdk-lib/custom-resources';
 import {
   BlockPublicAccess,
   Bucket,
@@ -19,6 +19,7 @@ import {
   DatabaseInstanceProps,
   PostgresEngineVersion,
   StorageType,
+  Credentials,
 } from "aws-cdk-lib/aws-rds";
 import {
   Peer,
@@ -42,9 +43,11 @@ export class SharedInfraStack extends Stack {
   public readonly dbSecret: Secret;
   public readonly trainingQueue: Queue;
   public readonly userPicsBucket: Bucket;
+  public readonly codeBucket: Bucket;
   public readonly appSg: SecurityGroup;
   public readonly lambdaSg: SecurityGroup;
   public readonly dbSg: SecurityGroup;
+  public readonly albSg: SecurityGroup;
 
   constructor(scope: Construct, id: string, props: SharedInfraStackProps) {
     super(scope, id, props);
@@ -57,6 +60,7 @@ export class SharedInfraStack extends Stack {
       appSg: this.appSg,
       lambdaSg: this.lambdaSg,
       dbSg: this.dbSg,
+      albSg: this.albSg,
     } = this.createSecurityGroups(prefix, envName));
 
     // Secret + RDS
@@ -72,10 +76,15 @@ export class SharedInfraStack extends Stack {
     // SQS
     this.trainingQueue = this.createQueue(prefix, envName);
 
+    // Code bucket
+    this.codeBucket = this.createCodeBucket(prefix, envName);
+
     new CfnOutput(this, "PicsBucket", {
       value: this.userPicsBucket.bucketName,
     });
   }
+
+  
 
   // -------- helpers ---------------------------------------------------
   private createVpc(
@@ -109,10 +118,14 @@ export class SharedInfraStack extends Stack {
       vpc: this.vpc,
       allowAllOutbound: false,
     });
-
+    const albSg = new SecurityGroup(this, `${prefix}AlbSg-${env}`, {
+      vpc: this.vpc,
+    });
+    albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80));
     dbSg.addIngressRule(appSg, Port.tcp(5432), "App access");
     dbSg.addIngressRule(lambdaSg, Port.tcp(5432), "Lambda access");
-    return { appSg, lambdaSg, dbSg };
+    appSg.addIngressRule(albSg, Port.tcp(3000), 'ALB to App access');
+    return { appSg, lambdaSg, dbSg, albSg };
   }
 
   private createDbSecret(
@@ -137,10 +150,10 @@ export class SharedInfraStack extends Stack {
   ) {
     new DatabaseInstance(this, `${prefix}Postgres-${env}`, {
       engine: DatabaseInstanceEngine.postgres({
-        version: PostgresEngineVersion.VER_15_4,
+        version: PostgresEngineVersion.VER_17_4,
       }),
       vpc: this.vpc,
-      credentials: { password: this.dbSecret.secretValueFromJson("password") },
+      credentials: Credentials.fromSecret(this.dbSecret),
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       storageType: StorageType.GP3,
@@ -159,10 +172,16 @@ export class SharedInfraStack extends Stack {
     env: string,
     overrides: Partial<BucketProps> = {}
   ) {
+    // 1. Create buckets
     const userPicsBucket = new Bucket(this, `${prefix}UserPics-${env}`, {
       encryption: BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          noncurrentVersionExpiration: Duration.days(env === 'prod' ? 90 : 7),
+        },
+      ],
       removalPolicy:
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       ...overrides,
@@ -176,16 +195,75 @@ export class SharedInfraStack extends Stack {
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 
-    // Replication
+    // 2. Enable versioning on the source bucket
+    const enableVersioningResource = new cr.AwsCustomResource(this, `${prefix}EnableVersioning-${env}`, {
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['s3:PutBucketVersioning'],
+          resources: [`arn:aws:s3:::${userPicsBucket.bucketName}`],
+        }),
+      ]),
+      onCreate: {
+        service: 'S3',
+        action: 'putBucketVersioning',
+        parameters: {
+          Bucket: userPicsBucket.bucketName,
+          VersioningConfiguration: {
+            Status: 'Enabled',
+          },
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`${prefix}${userPicsBucket.bucketName}-versioning-${env}`),
+      },
+    });
+
+
+    // 3. Grant the role permissions to replicate to the destination bucket
     const role = new iam.Role(this, `${prefix}ReplRole-${env}`, {
       assumedBy: new iam.ServicePrincipal("s3.amazonaws.com"),
     });
     userPicsBucket.grantRead(role);
     backupBucket.grantReadWrite(role);
-    userPicsBucket.addReplicationRule({
-      role,
-      destination: { bucket: backupBucket },
+    
+    // 4. Configure replication using a custom resource
+    const configureReplicationResource = new cr.AwsCustomResource(this, `${prefix}ConfigureReplication-${env}`, {
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['s3:PutBucketReplication',
+            's3:GetBucketReplication',
+            's3:DeleteBucketReplication',
+            's3:PutReplicationConfiguration',
+            's3:GetReplicationConfiguration',
+          ],
+          resources: [`arn:aws:s3:::${userPicsBucket.bucketName}`],
+        }),
+        new iam.PolicyStatement({
+          actions: ['iam:PassRole'],
+          resources: [role.roleArn],
+        }),
+      ]),
+      onCreate: {
+        service: 'S3',
+        action: 'putBucketReplication',
+        parameters: {
+          Bucket: userPicsBucket.bucketName,
+          ReplicationConfiguration: {
+            Role: role.roleArn,
+            Rules: [
+              {
+                Status: 'Enabled',
+                Prefix: '', // Replicate all objects
+                Destination: {
+                  Bucket: backupBucket.bucketArn,
+                },
+              },
+            ],
+          },
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(userPicsBucket.bucketName),
+      },
     });
+
+    configureReplicationResource.node.addDependency(enableVersioningResource);
 
     return { userPicsBucket, backupBucket };
   }
@@ -195,10 +273,27 @@ export class SharedInfraStack extends Stack {
     env: string,
     overrides: Partial<QueueProps> = {}
   ): Queue {
-    return new Queue(this, `${prefix}TrainingQueue-${env}`, {
+    const dlq = new Queue(this, `${prefix}TrainingDLQ-${env}`, {
+      retentionPeriod: Duration.days(14),
+    });
+  
+    const trainingQueue = new Queue(this, `${prefix}TrainingQueue-${env}`, {
       visibilityTimeout: Duration.minutes(5),
       retentionPeriod: Duration.days(4),
+      deadLetterQueue: {
+        maxReceiveCount: 5,
+        queue: dlq,
+      },
       ...overrides,
+    });
+  
+    return trainingQueue;
+  }
+
+  private createCodeBucket(prefix: string, env: string): Bucket {
+    return new Bucket(this, `${prefix}CodeBucket-${env}`, {
+      versioned: true,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
   }
 }
