@@ -5,6 +5,11 @@
         "watch": "tsc -w",
         "cdk": "cdk",
         "deploy:usain:dev": "cdk deploy UsainStack-dev --require-approval never --context env=dev",
+        "deploy:usain:prod": "cdk deploy UsainStack-prod --require-approval never --context env=prod",
+
+        "deploy:shared:dev": "cdk deploy SharedInfra-dev --require-approval never --context env=dev",
+        "deploy:shared:prod": "cdk deploy SharedInfra-prod --require-approval never --context env=prod",
+
         "deploy:dev": "cdk deploy --context env=dev",
         "deploy:prod": "cdk deploy --context env=prod"
     },

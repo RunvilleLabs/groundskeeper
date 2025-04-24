@@ -20,3 +20,11 @@ shared: [vpc, security groups, subnets], rds, secrets (db creds, api keys, opena
 usain: ecs (usain), fargate (usain), ecr (docker images host)
 dojo: sqs, dynamo (maybe?), lambda, eventbridge, apigateway (optional)
 dashboard-stack: Cloudwatch dashboards, cloudwatch alarms
+
+How to use Bastion:
+
+```
+brew install awscli session-manager-plugin
+aws configure   # or use AWS_PROFILE / AWS_REGION env vars
+aws ssm start-session --target i-00765cc9477cafe50
+```
