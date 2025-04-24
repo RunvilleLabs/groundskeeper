@@ -42,7 +42,7 @@ export class DojoStack extends Stack {
     const fn = new Function(this, `${prefix}-${props.envName}`, {
       runtime: Runtime.NODEJS_18_X,
       code: Code.fromBucket(props.codeBucket, "dojo-worker.zip"),
-      handler: "handler.handler",
+      handler: "dist/handler.handler",
       memorySize: 512,
       timeout: Duration.minutes(5),
       vpc: props.vpc,

@@ -37,5 +37,6 @@ new UsainStack(app, `UsainStack-${envName}`, {
   userPicsBucket: shared.userPicsBucket,
   appSg: shared.appSg,
   albSg: shared.albSg,
+  dbInstance: shared.dbInstance,
   env,
 });

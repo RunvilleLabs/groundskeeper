@@ -15,12 +15,13 @@ import {
   StackProps,
   aws_ecr as ecr,
 } from "aws-cdk-lib";
-import { Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2";
+import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2";
 
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
+import { DatabaseInstance } from "aws-cdk-lib/aws-rds";
 
 export interface UsainStackProps extends StackProps {
   envName: string;
@@ -30,6 +31,7 @@ export interface UsainStackProps extends StackProps {
   userPicsBucket: Bucket;
   appSg: SecurityGroup;
   albSg: SecurityGroup;
+  dbInstance: DatabaseInstance;
 }
 
 export class UsainStack extends Stack {
@@ -39,10 +41,11 @@ export class UsainStack extends Stack {
     const prefix = "Usain";
 
     // ECS Cluster
+    const appSecret = this.createAppSecret(prefix, envName);
     const cluster = this.createCluster(prefix, envName, props.vpc);
     const repo = this.createRepo(prefix, envName);
-    const taskDef = this.createTaskDef(prefix, envName, repo, props);
-    const svc = this.createService(prefix, envName, cluster, taskDef, props);
+    const taskDef = this.createTaskDef(prefix, envName, repo, props, appSecret);
+    const svc = this.createService(prefix, envName, cluster, taskDef, props, appSecret);
     this.attachAlb(prefix, envName, svc, props);
   }
 
@@ -57,11 +60,19 @@ export class UsainStack extends Stack {
     });
   }
 
+  private createAppSecret(prefix: string, env: string): Secret {
+    return new Secret(this, `${prefix}AppSecret-${env}`, {
+      secretName: `${prefix}AppSecret-${env}`,
+      description: `Manually created secret for ${prefix}`,
+    });
+  }
+
   private createTaskDef(
     prefix: string,
     env: string,
     repo: ecr.Repository,
-    props: UsainStackProps
+    props: UsainStackProps,
+    appSecret: Secret
   ): FargateTaskDefinition {
     const td = new FargateTaskDefinition(this, `${prefix}Task-${env}`, {
       cpu: 512,
@@ -76,8 +87,20 @@ export class UsainStack extends Stack {
         NODE_ENV: env,
         TRAINING_QUEUE_URL: props.queue.queueUrl,
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
+        POSTGRES_HOST: props.dbInstance.instanceEndpoint.hostname,
+        POSTGRES_DB: "postgres",
+        POSTGRES_PORT: props.dbInstance.instanceEndpoint.port.toString(),
       },
-      secrets: { DATABASE_URL: ecs.Secret.fromSecretsManager(props.dbSecret) },
+      secrets: {
+        POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
+        POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret),
+        JWT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_SECRET"),
+        GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_ID"),
+        GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_SECRET"),
+        APPLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_ID"),
+        APPLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_SECRET"),
+        APPLE_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "APPLE_REDIRECT_URI"),
+      },
     });
 
     return td;
@@ -88,7 +111,8 @@ export class UsainStack extends Stack {
     env: string,
     cluster: Cluster,
     taskDef: FargateTaskDefinition,
-    props: UsainStackProps
+    props: UsainStackProps,
+    appSecret: Secret
   ): FargateService {
     const service = new FargateService(this, `${prefix}Service-${env}`, {
       cluster,
@@ -109,7 +133,7 @@ export class UsainStack extends Stack {
     props.queue.grantSendMessages(service.taskDefinition.taskRole);
     props.dbSecret.grantRead(service.taskDefinition.taskRole);
     props.userPicsBucket.grantReadWrite(service.taskDefinition.taskRole);
-
+    appSecret.grantRead(service.taskDefinition.taskRole);
     return service;
   }
 

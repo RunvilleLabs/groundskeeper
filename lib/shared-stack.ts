@@ -48,6 +48,7 @@ export class SharedInfraStack extends Stack {
   public readonly lambdaSg: SecurityGroup;
   public readonly dbSg: SecurityGroup;
   public readonly albSg: SecurityGroup;
+  public readonly dbInstance: DatabaseInstance;
 
   constructor(scope: Construct, id: string, props: SharedInfraStackProps) {
     super(scope, id, props);
@@ -65,7 +66,7 @@ export class SharedInfraStack extends Stack {
 
     // Secret + RDS
     this.dbSecret = this.createDbSecret(prefix, envName);
-    this.createPostgres(prefix, envName);
+    this.dbInstance = this.createPostgres(prefix, envName);
 
     // Buckets + replication
     ({ userPicsBucket: this.userPicsBucket } = this.createBuckets(
@@ -147,8 +148,8 @@ export class SharedInfraStack extends Stack {
     prefix: string,
     env: string,
     overrides: Partial<DatabaseInstanceProps> = {}
-  ) {
-    new DatabaseInstance(this, `${prefix}Postgres-${env}`, {
+  ): DatabaseInstance {
+    return new DatabaseInstance(this, `${prefix}Postgres-${env}`, {
       engine: DatabaseInstanceEngine.postgres({
         version: PostgresEngineVersion.VER_17_4,
       }),
