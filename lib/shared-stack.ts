@@ -157,6 +157,11 @@ export class SharedInfraStack extends Stack {
     env: string,
     overrides: Partial<DatabaseInstanceProps> = {}
   ): DatabaseInstance {
+    const defaultInstanceType =
+      env === "prod"
+        ? InstanceType.of(InstanceClass.M5, InstanceSize.LARGE)
+        : InstanceType.of(InstanceClass.T3, InstanceSize.MICRO);
+
     return new DatabaseInstance(this, `${prefix}Postgres-${env}`, {
       engine: DatabaseInstanceEngine.postgres({
         version: PostgresEngineVersion.VER_17_4,
@@ -166,6 +171,7 @@ export class SharedInfraStack extends Stack {
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       storageType: StorageType.GP3,
+      instanceType: defaultInstanceType,
       multiAz: env === "prod",
       backupRetention: Duration.days(7),
       deletionProtection: env === "prod",
