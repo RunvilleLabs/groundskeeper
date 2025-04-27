@@ -43,3 +43,33 @@ For prod:
 aws ssm start-session --target i-02d73d01d5defbcaf # for prod bastion
 dbprod
 ```
+
+If problems with db command run:
+
+```
+sudo dnf install -y postgresql17
+sudo tee /usr/local/bin/db >/dev/null <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# Hard-code your secret name (or ARN) here:
+SECRET_ID="SharedDbSecretdevBAE9EFEA-cH0P0qQkCBmA"
+
+JSON=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" \
+       --query SecretString --output text)
+
+export PGHOST=$(echo "$JSON" | jq -r .host)
+export PGUSER=$(echo "$JSON" | jq -r .username)
+export PGPASSWORD=$(echo "$JSON" | jq -r .password)
+export PGDATABASE=${PGDATABASE:-postgres}
+
+if [ $# -eq 0 ]; then
+  exec psql          # interactive shell
+else
+  exec "$@"          # run whatever CLI you passed
+fi
+EOF
+
+sudo chmod +x /usr/local/bin/db
+echo "✅ Wrapper fixed — type 'db' to connect."
+```
