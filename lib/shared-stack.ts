@@ -176,6 +176,7 @@ export class SharedInfraStack extends Stack {
       backupRetention: Duration.days(7),
       deletionProtection: env === "prod",
       securityGroups: [this.dbSg],
+      publiclyAccessible: env !== "prod",
       removalPolicy:
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       ...overrides,

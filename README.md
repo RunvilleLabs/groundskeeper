@@ -33,7 +33,7 @@ aws configure   # or use AWS_PROFILE / AWS_REGION env vars
 For dev bastion:
 
 ```
-aws ssm start-session --target i-00765cc9477cafe50 # for dev bastion
+aws ssm start-session --target i-00acf13221ce04155 # for dev bastion
 db # this command will fire up connection to postgress
 ```
 
