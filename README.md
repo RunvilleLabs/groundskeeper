@@ -73,3 +73,18 @@ EOF
 sudo chmod +x /usr/local/bin/db
 echo "✅ Wrapper fixed — type 'db' to connect."
 ```
+
+
+How to connect to DB from DBeaver/pgAdmin
+
+First, you need to enable port forwarding:
+```
+aws ssm start-session \
+  --target i-00acf13221ce04155 \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["sharedinfra-dev-sharedpostgresdev5eb3d8c8-lidtaoace5fl.c1wi08qo8czt.eu-central-1.rds.amazonaws.com"],
+                "portNumber":["5432"],
+                "localPortNumber":["15432"]}'
+```
+
+Now when you have port opened, you can connect to RDS using your localhost. Use `host: 127.0.0.1`, `port:15432`, `Database: postgres` and username and password from Secrets Manager.
