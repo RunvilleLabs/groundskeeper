@@ -87,19 +87,20 @@ export class UsainStack extends Stack {
         NODE_ENV: env,
         TRAINING_QUEUE_URL: props.queue.queueUrl,
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
-        POSTGRES_HOST: props.dbInstance.instanceEndpoint.hostname,
-        POSTGRES_DB: "postgres",
-        POSTGRES_PORT: props.dbInstance.instanceEndpoint.port.toString(),
       },
       secrets: {
         POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
         POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret),
         JWT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_SECRET"),
-        GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_ID"),
+        GOOGLE_CLIENT_WEB_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_WEB_ID"),
         GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_SECRET"),
         APPLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_ID"),
         APPLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_SECRET"),
         APPLE_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "APPLE_REDIRECT_URI"),
+        GOOGLE_ANDROID_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_ANDROID_CLIENT_ID"),
+        GMAIL_SENDER: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_SENDER"),
+        GMAIL_REFRESH_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REFRESH_TOKEN"),
+        GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI")
       },
     });
 
