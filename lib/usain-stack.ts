@@ -100,7 +100,8 @@ export class UsainStack extends Stack {
         GOOGLE_ANDROID_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_ANDROID_CLIENT_ID"),
         GMAIL_SENDER: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_SENDER"),
         GMAIL_REFRESH_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REFRESH_TOKEN"),
-        GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI")
+        GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI"),
+        FIT_S3_BUCKET_NAME: ecs.Secret.fromSecretsManager(appSecret, "FIT_S3_BUCKET_NAME")
       },
     });
 
