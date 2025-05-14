@@ -50,6 +50,7 @@ export class SharedInfraStack extends Stack {
   public readonly dbSecret: Secret;
   public readonly trainingQueue: Queue;
   public readonly userPicsBucket: Bucket;
+  public readonly fitDataBucket: Bucket;
   public readonly codeBucket: Bucket;
   public readonly appSg: SecurityGroup;
   public readonly lambdaSg: SecurityGroup;
@@ -78,21 +79,15 @@ export class SharedInfraStack extends Stack {
     this.dbSecret.grantRead(this.bastion.instance);
     this.dbInstance = this.createPostgres(prefix, envName);
 
-    // Buckets + replication
-    ({ userPicsBucket: this.userPicsBucket } = this.createBuckets(
-      prefix,
-      envName
-    ));
+    // Buckets
+    this.userPicsBucket = this.createUserPicsBucket(prefix, envName).userPicsBucket;
+    this.fitDataBucket = this.createFitBucket(prefix, envName).fitDataBucket;
 
     // SQS
     this.trainingQueue = this.createQueue(prefix, envName);
 
     // Code bucket
     this.codeBucket = this.createCodeBucket(prefix, envName);
-
-    new CfnOutput(this, "PicsBucket", {
-      value: this.userPicsBucket.bucketName,
-    });
   }
 
   // -------- helpers ---------------------------------------------------
@@ -183,13 +178,36 @@ export class SharedInfraStack extends Stack {
     });
   }
 
-  private createBuckets(
+  private createUserPicsBucket(
     prefix: string,
     env: string,
     overrides: Partial<BucketProps> = {}
   ) {
-    // 1. Create buckets
     const userPicsBucket = new Bucket(this, `${prefix}UserPics-${env}`, {
+      bucketName: `shared-${env}-user-pics`,
+      encryption: BucketEncryption.S3_MANAGED,
+      versioned: true,
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          noncurrentVersionExpiration: Duration.days(env === "prod" ? 90 : 7),
+        },
+      ],
+      removalPolicy:
+        env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      ...overrides,
+    });
+  
+    return { userPicsBucket };
+  }  
+
+  private createFitBucket(
+    prefix: string,
+    env: string,
+    overrides: Partial<BucketProps> = {}
+  ) {
+    const fitDataBucket = new Bucket(this, `${prefix}FitData-${env}`, {
+      bucketName: `shared-${env}-fit-data`,
       encryption: BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -203,7 +221,7 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
 
-    const backupBucket = new Bucket(this, `${prefix}Backup-${env}`, {
+    const backupBucket = new Bucket(this, `${prefix}FitBackup-${env}`, {
       encryption: BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -211,7 +229,6 @@ export class SharedInfraStack extends Stack {
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 
-    // 2. Enable versioning on the source bucket
     const enableVersioningResource = new cr.AwsCustomResource(
       this,
       `${prefix}EnableVersioning-${env}`,
@@ -219,30 +236,30 @@ export class SharedInfraStack extends Stack {
         policy: cr.AwsCustomResourcePolicy.fromStatements([
           new iam.PolicyStatement({
             actions: ["s3:PutBucketVersioning"],
-            resources: [`arn:aws:s3:::${userPicsBucket.bucketName}`],
+            resources: [`arn:aws:s3:::${fitDataBucket.bucketName}`],
           }),
         ]),
         onCreate: {
           service: "S3",
           action: "putBucketVersioning",
           parameters: {
-            Bucket: userPicsBucket.bucketName,
+            Bucket: fitDataBucket.bucketName,
             VersioningConfiguration: {
               Status: "Enabled",
             },
           },
           physicalResourceId: cr.PhysicalResourceId.of(
-            `${prefix}${userPicsBucket.bucketName}-versioning-${env}`
+            `${prefix}${fitDataBucket.bucketName}-versioning-${env}`
           ),
         },
       }
     );
 
     // 3. Grant the role permissions to replicate to the destination bucket
-    const role = new iam.Role(this, `${prefix}ReplRole-${env}`, {
+    const role = new iam.Role(this, `${prefix}FitReplRole-${env}`, {
       assumedBy: new iam.ServicePrincipal("s3.amazonaws.com"),
     });
-    userPicsBucket.grantRead(role);
+    fitDataBucket.grantRead(role);
     backupBucket.grantReadWrite(role);
 
     // 4. Configure replication using a custom resource
@@ -259,7 +276,7 @@ export class SharedInfraStack extends Stack {
               "s3:PutReplicationConfiguration",
               "s3:GetReplicationConfiguration",
             ],
-            resources: [`arn:aws:s3:::${userPicsBucket.bucketName}`],
+            resources: [`arn:aws:s3:::${fitDataBucket.bucketName}`],
           }),
           new iam.PolicyStatement({
             actions: ["iam:PassRole"],
@@ -270,13 +287,13 @@ export class SharedInfraStack extends Stack {
           service: "S3",
           action: "putBucketReplication",
           parameters: {
-            Bucket: userPicsBucket.bucketName,
+            Bucket: fitDataBucket.bucketName,
             ReplicationConfiguration: {
               Role: role.roleArn,
               Rules: [
                 {
                   Status: "Enabled",
-                  Prefix: "", // Replicate all objects
+                  Prefix: "",
                   Destination: {
                     Bucket: backupBucket.bucketArn,
                   },
@@ -285,7 +302,7 @@ export class SharedInfraStack extends Stack {
             },
           },
           physicalResourceId: cr.PhysicalResourceId.of(
-            userPicsBucket.bucketName
+            fitDataBucket.bucketName
           ),
         },
       }
@@ -293,7 +310,7 @@ export class SharedInfraStack extends Stack {
 
     configureReplicationResource.node.addDependency(enableVersioningResource);
 
-    return { userPicsBucket, backupBucket };
+    return { fitDataBucket, backupBucket };
   }
 
   private createQueue(

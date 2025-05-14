@@ -29,6 +29,7 @@ export interface UsainStackProps extends StackProps {
   queue: Queue;
   dbSecret: Secret;
   userPicsBucket: Bucket;
+  fitDataBucket: Bucket;
   appSg: SecurityGroup;
   albSg: SecurityGroup;
   dbInstance: DatabaseInstance;
@@ -87,12 +88,14 @@ export class UsainStack extends Stack {
         NODE_ENV: env,
         TRAINING_QUEUE_URL: props.queue.queueUrl,
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
+        FIT_S3_BUCKET_NAME: props.fitDataBucket.bucketName
       },
       secrets: {
         POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
         POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret),
         JWT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_SECRET"),
-        GOOGLE_CLIENT_WEB_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_WEB_ID"),
+        JWT_REFRESH_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_REFRESH_SECRET"),
+        GOOGLE_WEB_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_WEB_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_CLIENT_SECRET"),
         APPLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_ID"),
         APPLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_SECRET"),
@@ -101,7 +104,6 @@ export class UsainStack extends Stack {
         GMAIL_SENDER: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_SENDER"),
         GMAIL_REFRESH_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REFRESH_TOKEN"),
         GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI"),
-        FIT_S3_BUCKET_NAME: ecs.Secret.fromSecretsManager(appSecret, "FIT_S3_BUCKET_NAME")
       },
     });
 
@@ -135,6 +137,7 @@ export class UsainStack extends Stack {
     props.queue.grantSendMessages(service.taskDefinition.taskRole);
     props.dbSecret.grantRead(service.taskDefinition.taskRole);
     props.userPicsBucket.grantReadWrite(service.taskDefinition.taskRole);
+    props.fitDataBucket.grantReadWrite(service.taskDefinition.taskRole);
     appSecret.grantRead(service.taskDefinition.taskRole);
     return service;
   }
