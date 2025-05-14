@@ -51,6 +51,7 @@ export class SharedInfraStack extends Stack {
   public readonly trainingQueue: Queue;
   public readonly userPicsBucket: Bucket;
   public readonly fitDataBucket: Bucket;
+  public readonly lessonPicsBucket: Bucket;
   public readonly codeBucket: Bucket;
   public readonly appSg: SecurityGroup;
   public readonly lambdaSg: SecurityGroup;
@@ -82,6 +83,7 @@ export class SharedInfraStack extends Stack {
     // Buckets
     this.userPicsBucket = this.createUserPicsBucket(prefix, envName).userPicsBucket;
     this.fitDataBucket = this.createFitBucket(prefix, envName).fitDataBucket;
+    this.lessonPicsBucket = this.createlessonPicsBucket(prefix, envName).lessonPicsBucket;
 
     // SQS
     this.trainingQueue = this.createQueue(prefix, envName);
@@ -152,9 +154,10 @@ export class SharedInfraStack extends Stack {
     env: string,
     overrides: Partial<DatabaseInstanceProps> = {}
   ): DatabaseInstance {
-    const defaultInstanceType =
-      env === "prod"
-        ? InstanceType.of(InstanceClass.M5, InstanceSize.LARGE)
+    const isProd = env === "prod";
+
+    const defaultInstanceType = isProd
+        ? InstanceType.of(InstanceClass.T4G, InstanceSize.SMALL)
         : InstanceType.of(InstanceClass.T3, InstanceSize.MICRO);
 
     return new DatabaseInstance(this, `${prefix}Postgres-${env}`, {
@@ -164,18 +167,40 @@ export class SharedInfraStack extends Stack {
       vpc: this.vpc,
       credentials: Credentials.fromSecret(this.dbSecret),
       allocatedStorage: 20,
-      maxAllocatedStorage: 100,
+      maxAllocatedStorage: isProd ? 100 : 20,
       storageType: StorageType.GP3,
       instanceType: defaultInstanceType,
-      multiAz: env === "prod",
+      multiAz: false,
       backupRetention: Duration.days(7),
-      deletionProtection: env === "prod",
+      deletionProtection: isProd,
       securityGroups: [this.dbSg],
-      publiclyAccessible: env !== "prod",
+      publiclyAccessible: !isProd,
+      removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      ...overrides,
+    });
+  }
+
+  private createlessonPicsBucket(
+    prefix: string,
+    env: string,
+    overrides: Partial<BucketProps> = {}
+  ) {
+    const lessonPicsBucket = new Bucket(this, `${prefix}LessonContent-${env}`, {
+      bucketName: `shared-${env}-lesson-content`,
+      encryption: BucketEncryption.S3_MANAGED,
+      versioned: true,
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          noncurrentVersionExpiration: Duration.days(env === "prod" ? 90 : 7),
+        },
+      ],
       removalPolicy:
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       ...overrides,
     });
+  
+    return { lessonPicsBucket };
   }
 
   private createUserPicsBucket(
