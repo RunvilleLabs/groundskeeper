@@ -33,7 +33,7 @@ aws configure   # or use AWS_PROFILE / AWS_REGION env vars
 For dev bastion:
 
 ```
-aws ssm start-session --target i-00acf13221ce04155 # for dev bastion
+aws ssm start-session --target i-03822ae06055cef72 # for dev bastion
 db # this command will fire up connection to postgress
 ```
 
@@ -80,7 +80,7 @@ How to connect to DB from DBeaver/pgAdmin
 First, you need to enable port forwarding:
 ```
 aws ssm start-session \
-  --target i-0b0cc1ac86f9bc082 \
+  --target i-03822ae06055cef72 \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
   --parameters '{"host":["sharedinfra-dev-sharedpostgresdev5eb3d8c8-lidtaoace5fl.c1wi08qo8czt.eu-central-1.rds.amazonaws.com"],
                 "portNumber":["5432"],
