@@ -4,6 +4,9 @@
         "build": "tsc",
         "watch": "tsc -w",
         "cdk": "cdk",
+        "deploy:dojo:dev": "cdk deploy DojoStack-dev --require-approval never --context env=dev",
+        "deploy:dojo:prod": "cdk deploy DojoStack-prod --require-approval never --context env=prod",
+
         "deploy:usain:dev": "cdk deploy UsainStack-dev --require-approval never --context env=dev",
         "deploy:usain:prod": "cdk deploy UsainStack-prod --require-approval never --context env=prod",
 

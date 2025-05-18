@@ -51,7 +51,6 @@ export class SharedInfraStack extends Stack {
   public readonly trainingQueue: Queue;
   public readonly userPicsBucket: Bucket;
   public readonly fitDataBucket: Bucket;
-  public readonly lessonPicsBucket: Bucket;
   public readonly codeBucket: Bucket;
   public readonly appSg: SecurityGroup;
   public readonly lambdaSg: SecurityGroup;
@@ -81,9 +80,8 @@ export class SharedInfraStack extends Stack {
     this.dbInstance = this.createPostgres(prefix, envName);
 
     // Buckets
-    this.userPicsBucket = this.createUserPicsBucket(prefix, envName).userPicsBucket;
-    this.fitDataBucket = this.createFitBucket(prefix, envName).fitDataBucket;
-    this.lessonPicsBucket = this.createlessonPicsBucket(prefix, envName).lessonPicsBucket;
+    this.userPicsBucket = this.createUserPicsBucket(prefix, envName);
+    this.fitDataBucket = this.createFitBucket(prefix, envName);
 
     // SQS
     this.trainingQueue = this.createQueue(prefix, envName);
@@ -180,29 +178,6 @@ export class SharedInfraStack extends Stack {
     });
   }
 
-  private createlessonPicsBucket(
-    prefix: string,
-    env: string,
-    overrides: Partial<BucketProps> = {}
-  ) {
-    const lessonPicsBucket = new Bucket(this, `${prefix}LessonContent-${env}`, {
-      bucketName: `shared-${env}-lesson-content`,
-      encryption: BucketEncryption.S3_MANAGED,
-      versioned: true,
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [
-        {
-          noncurrentVersionExpiration: Duration.days(env === "prod" ? 90 : 7),
-        },
-      ],
-      removalPolicy:
-        env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
-      ...overrides,
-    });
-  
-    return { lessonPicsBucket };
-  }
-
   private createUserPicsBucket(
     prefix: string,
     env: string,
@@ -223,7 +198,7 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
   
-    return { userPicsBucket };
+    return userPicsBucket;
   }  
 
   private createFitBucket(
@@ -245,97 +220,7 @@ export class SharedInfraStack extends Stack {
         env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       ...overrides,
     });
-
-    const backupBucket = new Bucket(this, `${prefix}FitBackup-${env}`, {
-      encryption: BucketEncryption.S3_MANAGED,
-      versioned: true,
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      removalPolicy:
-        env === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
-    });
-
-    const enableVersioningResource = new cr.AwsCustomResource(
-      this,
-      `${prefix}EnableVersioning-${env}`,
-      {
-        policy: cr.AwsCustomResourcePolicy.fromStatements([
-          new iam.PolicyStatement({
-            actions: ["s3:PutBucketVersioning"],
-            resources: [`arn:aws:s3:::${fitDataBucket.bucketName}`],
-          }),
-        ]),
-        onCreate: {
-          service: "S3",
-          action: "putBucketVersioning",
-          parameters: {
-            Bucket: fitDataBucket.bucketName,
-            VersioningConfiguration: {
-              Status: "Enabled",
-            },
-          },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            `${prefix}${fitDataBucket.bucketName}-versioning-${env}`
-          ),
-        },
-      }
-    );
-
-    // 3. Grant the role permissions to replicate to the destination bucket
-    const role = new iam.Role(this, `${prefix}FitReplRole-${env}`, {
-      assumedBy: new iam.ServicePrincipal("s3.amazonaws.com"),
-    });
-    fitDataBucket.grantRead(role);
-    backupBucket.grantReadWrite(role);
-
-    // 4. Configure replication using a custom resource
-    const configureReplicationResource = new cr.AwsCustomResource(
-      this,
-      `${prefix}ConfigureReplication-${env}`,
-      {
-        policy: cr.AwsCustomResourcePolicy.fromStatements([
-          new iam.PolicyStatement({
-            actions: [
-              "s3:PutBucketReplication",
-              "s3:GetBucketReplication",
-              "s3:DeleteBucketReplication",
-              "s3:PutReplicationConfiguration",
-              "s3:GetReplicationConfiguration",
-            ],
-            resources: [`arn:aws:s3:::${fitDataBucket.bucketName}`],
-          }),
-          new iam.PolicyStatement({
-            actions: ["iam:PassRole"],
-            resources: [role.roleArn],
-          }),
-        ]),
-        onCreate: {
-          service: "S3",
-          action: "putBucketReplication",
-          parameters: {
-            Bucket: fitDataBucket.bucketName,
-            ReplicationConfiguration: {
-              Role: role.roleArn,
-              Rules: [
-                {
-                  Status: "Enabled",
-                  Prefix: "",
-                  Destination: {
-                    Bucket: backupBucket.bucketArn,
-                  },
-                },
-              ],
-            },
-          },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            fitDataBucket.bucketName
-          ),
-        },
-      }
-    );
-
-    configureReplicationResource.node.addDependency(enableVersioningResource);
-
-    return { fitDataBucket, backupBucket };
+    return fitDataBucket;
   }
 
   private createQueue(

@@ -36,7 +36,6 @@ new UsainStack(app, `UsainStack-${envName}`, {
   dbSecret: shared.dbSecret,
   userPicsBucket: shared.userPicsBucket,
   fitDataBucket: shared.fitDataBucket,
-  lessonPicsBucket: shared.lessonPicsBucket,
   appSg: shared.appSg,
   albSg: shared.albSg,
   dbInstance: shared.dbInstance,

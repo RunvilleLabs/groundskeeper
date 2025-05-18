@@ -30,7 +30,6 @@ export interface UsainStackProps extends StackProps {
   dbSecret: Secret;
   userPicsBucket: Bucket;
   fitDataBucket: Bucket;
-  lessonPicsBucket: Bucket;
   appSg: SecurityGroup;
   albSg: SecurityGroup;
   dbInstance: DatabaseInstance;
@@ -90,7 +89,6 @@ export class UsainStack extends Stack {
         TRAINING_QUEUE_URL: props.queue.queueUrl,
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
         FIT_S3_BUCKET_NAME: props.fitDataBucket.bucketName,
-        LESSON_PICS_S3_BUCKET_NAME: props.lessonPicsBucket.bucketName,
       },
       secrets: {
         POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
@@ -140,7 +138,6 @@ export class UsainStack extends Stack {
     props.dbSecret.grantRead(service.taskDefinition.taskRole);
     props.userPicsBucket.grantReadWrite(service.taskDefinition.taskRole);
     props.fitDataBucket.grantReadWrite(service.taskDefinition.taskRole);
-    props.lessonPicsBucket.grantReadWrite(service.taskDefinition.taskRole);
     appSecret.grantRead(service.taskDefinition.taskRole);
     return service;
   }
