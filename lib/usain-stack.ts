@@ -1,6 +1,5 @@
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
-
 import {
   Cluster,
   ContainerImage,
@@ -16,7 +15,7 @@ import {
   aws_ecr as ecr,
 } from "aws-cdk-lib";
 import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2";
-
+import { Certificate } from "aws-cdk-lib/aws-certificatemanager";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
@@ -154,16 +153,40 @@ export class UsainStack extends Stack {
       securityGroup: props.albSg,
     });
 
-    const listener = alb.addListener("Http", { port: 80, open: true });
-    listener.addTargets("ECS", {
+    alb.addListener('Http', {
+      port: 80,
+      open: true,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+      }),
+    });
+
+    const certArns = this.node.tryGetContext('certArns');
+    if (!certArns || !certArns[env]) {
+      throw new Error(`No certificate ARN found for environment "${env}".`);
+    }
+
+    const certificate = Certificate.fromCertificateArn(this, `${env}Cert`, certArns[env]);
+
+    const httpsListener = alb.addListener('Https', {
+      port: 443,
+      certificates: [certificate],
+      open: true,
+    });
+
+    httpsListener.addTargets('ECS', {
       port: 80,
       targets: [
         service.loadBalancerTarget({
-          containerName: "web",
+          containerName: 'web',
           containerPort: 3000,
         }),
       ],
-      healthCheck: { path: "/health", interval: Duration.seconds(30) },
+      healthCheck: {
+        path: '/health',
+        interval: Duration.seconds(30),
+      },
     });
   }
 }
