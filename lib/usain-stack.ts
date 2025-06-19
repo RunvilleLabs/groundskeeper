@@ -103,6 +103,11 @@ export class UsainStack extends Stack {
         GMAIL_SENDER: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_SENDER"),
         GMAIL_REFRESH_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REFRESH_TOKEN"),
         GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI"),
+        FIREBASE_CONFIG: ecs.Secret.fromSecretsManager(appSecret, "FIREBASE_CONFIG"),
+        SMSC_API_KEY: ecs.Secret.fromSecretsManager(appSecret, "SMSC_API_KEY"),
+        SLACK_WEBHOOK_URL: ecs.Secret.fromSecretsManager(appSecret, "SLACK_WEBHOOK_URL"),
+        TELEGRAM_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_TOKEN"),
+        USAIN_BASE_URL: ecs.Secret.fromSecretsManager(appSecret, "USAIN_BASE_URL"),
       },
     });
 
