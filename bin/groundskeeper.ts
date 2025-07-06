@@ -28,7 +28,7 @@ new DojoStack(app, `DojoStack-${envName}`, {
   env,
 });
 
-// ── Usain (Express ECS) stack ─────────────────────────────────
+// ── Usain (ECS) stack ─────────────────────────────────
 new UsainStack(app, `UsainStack-${envName}`, {
   envName,
   vpc: shared.vpc,

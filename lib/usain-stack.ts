@@ -21,6 +21,7 @@ import { Construct } from "constructs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { DatabaseInstance } from "aws-cdk-lib/aws-rds";
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export interface UsainStackProps extends StackProps {
   envName: string;
@@ -79,6 +80,13 @@ export class UsainStack extends Stack {
       memoryLimitMiB: 1024,
     });
 
+    td.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:SendEmail", "ses:SendRawEmail"],
+        resources: ["*"],
+      })
+    );    
+
     td.addContainer("web", {
       image: ContainerImage.fromEcrRepository(repo, env),
       logging: LogDriver.awsLogs({ streamPrefix: "usain" }),
@@ -88,6 +96,7 @@ export class UsainStack extends Stack {
         TRAINING_QUEUE_URL: props.queue.queueUrl,
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
         FIT_S3_BUCKET_NAME: props.fitDataBucket.bucketName,
+        AWS_REGION: props.env?.region || 'eu-central-1',
       },
       secrets: {
         POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
@@ -99,7 +108,6 @@ export class UsainStack extends Stack {
         APPLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_ID"),
         APPLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "APPLE_CLIENT_SECRET"),
         APPLE_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "APPLE_REDIRECT_URI"),
-        GOOGLE_ANDROID_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_ANDROID_CLIENT_ID"),
         GMAIL_SENDER: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_SENDER"),
         GMAIL_REFRESH_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REFRESH_TOKEN"),
         GMAIL_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecret, "GMAIL_REDIRECT_URI"),
