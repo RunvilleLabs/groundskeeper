@@ -97,6 +97,7 @@ export class UsainStack extends Stack {
         USER_PICS_BUCKET: props.userPicsBucket.bucketName,
         FIT_S3_BUCKET_NAME: props.fitDataBucket.bucketName,
         AWS_REGION: props.env?.region || 'eu-central-1',
+        IS_ALLOW_LIST_ENABLED: env === 'dev' ? 'false' : 'true',
       },
       secrets: {
         POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
