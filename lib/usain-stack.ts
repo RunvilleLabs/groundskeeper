@@ -117,6 +117,9 @@ export class UsainStack extends Stack {
         SLACK_WEBHOOK_URL: ecs.Secret.fromSecretsManager(appSecret, "SLACK_WEBHOOK_URL"),
         TELEGRAM_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_TOKEN"),
         USAIN_BASE_URL: ecs.Secret.fromSecretsManager(appSecret, "USAIN_BASE_URL"),
+        ATHLETE_BASE_URL: ecs.Secret.fromSecretsManager(appSecret, "ATHLETE_BASE_URL"),
+        TELEGRAM_BOT_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_BOT_TOKEN"),
+        TELEGRAM_SECRET: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_SECRET"),
       },
     });
 
