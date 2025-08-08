@@ -22,6 +22,7 @@ import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { DatabaseInstance } from "aws-cdk-lib/aws-rds";
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 
 export interface UsainStackProps extends StackProps {
   envName: string;
@@ -45,7 +46,8 @@ export class UsainStack extends Stack {
     const appSecret = this.createAppSecret(prefix, envName);
     const cluster = this.createCluster(prefix, envName, props.vpc);
     const repo = this.createRepo(prefix, envName);
-    const taskDef = this.createTaskDef(prefix, envName, repo, props, appSecret);
+    const logGroup = this.createLogGroup(prefix, envName);
+    const taskDef = this.createTaskDef(prefix, envName, repo,logGroup, props, appSecret);
     const svc = this.createService(prefix, envName, cluster, taskDef, props, appSecret);
     this.attachAlb(prefix, envName, svc, props);
   }
@@ -72,6 +74,7 @@ export class UsainStack extends Stack {
     prefix: string,
     env: string,
     repo: ecr.Repository,
+    logGroup: LogGroup,
     props: UsainStackProps,
     appSecret: Secret
   ): FargateTaskDefinition {
@@ -89,7 +92,10 @@ export class UsainStack extends Stack {
 
     td.addContainer("web", {
       image: ContainerImage.fromEcrRepository(repo, env),
-      logging: LogDriver.awsLogs({ streamPrefix: "usain" }),
+      logging: LogDriver.awsLogs({ 
+        streamPrefix: "usain",
+        logGroup: logGroup,
+      }),
       portMappings: [{ containerPort: 3000 }],
       environment: {
         NODE_ENV: env,
@@ -204,6 +210,13 @@ export class UsainStack extends Stack {
         path: '/health',
         interval: Duration.seconds(30),
       },
+    });
+  }
+
+  private createLogGroup(prefix: string, env: string): LogGroup {
+    return new LogGroup(this, `${prefix}LogGroup-${env}`, {
+      logGroupName: `/ecs/usain/${env}`,
+      retention: env === 'dev' ? RetentionDays.ONE_WEEK : RetentionDays.ONE_MONTH,
     });
   }
 }
