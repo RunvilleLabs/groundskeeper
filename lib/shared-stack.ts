@@ -35,6 +35,9 @@ import {
 } from "aws-cdk-lib/aws-rds";
 import { Queue, QueueProps } from "aws-cdk-lib/aws-sqs";
 import { Secret, SecretProps } from "aws-cdk-lib/aws-secretsmanager";
+import { Topic } from "aws-cdk-lib/aws-sns";
+import { Alarm, ComparisonOperator, Metric, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch";
+import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
 
 import { Construct } from "constructs";
 
@@ -46,6 +49,7 @@ export class SharedInfraStack extends Stack {
   public readonly vpc: Vpc;
   public readonly dbSecret: Secret;
   public readonly trainingQueue: Queue;
+  public readonly trainingDLQ: Queue;
   public readonly userPicsBucket: Bucket;
   public readonly fitDataBucket: Bucket;
   public readonly codeBucket: Bucket;
@@ -55,6 +59,7 @@ export class SharedInfraStack extends Stack {
   public readonly albSg: SecurityGroup;
   public readonly dbInstance: DatabaseInstance;
   public readonly bastion: BastionHostLinux;
+  public readonly dlqAlarmTopic: Topic;
   constructor(scope: Construct, id: string, props: SharedInfraStackProps) {
     super(scope, id, props);
     const { envName } = props;
@@ -81,7 +86,13 @@ export class SharedInfraStack extends Stack {
     this.fitDataBucket = this.createFitBucket(prefix, envName);
 
     // SQS
-    this.trainingQueue = this.createQueue(prefix, envName);
+    const { trainingQueue, dlq } = this.createQueue(prefix, envName);
+    this.trainingQueue = trainingQueue;
+    this.trainingDLQ = dlq;
+
+    // DLQ Monitoring
+    this.dlqAlarmTopic = this.createDLQAlarmTopic(prefix, envName);
+    this.createDLQAlarm(prefix, envName, dlq, this.dlqAlarmTopic);
 
     // Code bucket
     this.codeBucket = this.createCodeBucket(prefix, envName);
@@ -224,7 +235,7 @@ export class SharedInfraStack extends Stack {
     prefix: string,
     env: string,
     overrides: Partial<QueueProps> = {}
-  ): Queue {
+  ): { trainingQueue: Queue; dlq: Queue } {
     const dlq = new Queue(this, `${prefix}TrainingDLQ-${env}`, {
       retentionPeriod: Duration.days(14),
     });
@@ -239,7 +250,7 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
 
-    return trainingQueue;
+    return { trainingQueue, dlq };
   }
 
   private createCodeBucket(prefix: string, env: string): Bucket {
@@ -274,5 +285,47 @@ export class SharedInfraStack extends Stack {
     });
 
     return { bastion, bastionSg };
+  }
+
+  private createDLQAlarmTopic(prefix: string, env: string): Topic {
+    const topic = new Topic(this, `${prefix}DLQAlarmTopic-${env}`, {
+      displayName: `Training DLQ Alerts - ${env}`,
+      topicName: `training-dlq-alerts-${env}`,
+    });
+
+    new CfnOutput(this, `${prefix}DLQAlarmTopicArn-${env}`, {
+      value: topic.topicArn,
+      description: 'SNS Topic ARN for Training DLQ alerts',
+      exportName: `training-dlq-alarm-topic-arn-${env}`,
+    });
+
+    return topic;
+  }
+
+  private createDLQAlarm(prefix: string, env: string, dlq: Queue, alarmTopic: Topic): void {
+    const alarm = new Alarm(this, `${prefix}TrainingDLQAlarm-${env}`, {
+      alarmName: `training-dlq-messages-${env}`,
+      alarmDescription: 'Alert when Training DLQ has more than 3 messages',
+      metric: new Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfVisibleMessages',
+        dimensionsMap: {
+          QueueName: dlq.queueName,
+        },
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 3,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+
+    alarm.addAlarmAction(new SnsAction(alarmTopic));
+
+    new CfnOutput(this, `${prefix}DLQAlarmName-${env}`, {
+      value: alarm.alarmName,
+      description: 'CloudWatch alarm name for Training DLQ monitoring',
+    });
   }
 }
