@@ -49,7 +49,7 @@ export class SharedInfraStack extends Stack {
   public readonly vpc: Vpc;
   public readonly dbSecret: Secret;
   public readonly trainingQueue: Queue;
-  public readonly trainingDLQ: Queue;
+  public trainingDLQ!: Queue;
   public readonly userPicsBucket: Bucket;
   public readonly fitDataBucket: Bucket;
   public readonly codeBucket: Bucket;
@@ -59,7 +59,7 @@ export class SharedInfraStack extends Stack {
   public readonly albSg: SecurityGroup;
   public readonly dbInstance: DatabaseInstance;
   public readonly bastion: BastionHostLinux;
-  public readonly dlqAlarmTopic: Topic;
+  public dlqAlarmTopic!: Topic;
   constructor(scope: Construct, id: string, props: SharedInfraStackProps) {
     super(scope, id, props);
     const { envName } = props;
@@ -86,13 +86,7 @@ export class SharedInfraStack extends Stack {
     this.fitDataBucket = this.createFitBucket(prefix, envName);
 
     // SQS
-    const { trainingQueue, dlq } = this.createQueue(prefix, envName);
-    this.trainingQueue = trainingQueue;
-    this.trainingDLQ = dlq;
-
-    // DLQ Monitoring
-    this.dlqAlarmTopic = this.createDLQAlarmTopic(prefix, envName);
-    this.createDLQAlarm(prefix, envName, dlq, this.dlqAlarmTopic);
+    this.trainingQueue = this.createQueue(prefix, envName);
 
     // Code bucket
     this.codeBucket = this.createCodeBucket(prefix, envName);
@@ -235,7 +229,7 @@ export class SharedInfraStack extends Stack {
     prefix: string,
     env: string,
     overrides: Partial<QueueProps> = {}
-  ): { trainingQueue: Queue; dlq: Queue } {
+  ): Queue {
     const dlq = new Queue(this, `${prefix}TrainingDLQ-${env}`, {
       retentionPeriod: Duration.days(14),
     });
@@ -250,7 +244,13 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
 
-    return { trainingQueue, dlq };
+    this.trainingDLQ = dlq;
+
+    // Create DLQ monitoring
+    this.dlqAlarmTopic = this.createDLQAlarmTopic(prefix, env);
+    this.createDLQAlarm(prefix, env, dlq, this.dlqAlarmTopic);
+
+    return trainingQueue;
   }
 
   private createCodeBucket(prefix: string, env: string): Bucket {
