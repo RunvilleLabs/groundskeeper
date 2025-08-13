@@ -35,6 +35,9 @@ import {
 } from "aws-cdk-lib/aws-rds";
 import { Queue, QueueProps } from "aws-cdk-lib/aws-sqs";
 import { Secret, SecretProps } from "aws-cdk-lib/aws-secretsmanager";
+import { Topic } from "aws-cdk-lib/aws-sns";
+import { Alarm, ComparisonOperator, Metric, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch";
+import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
 
 import { Construct } from "constructs";
 
@@ -239,6 +242,10 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
 
+    // Create DLQ monitoring
+    const dlqAlarmTopic = this.createDLQAlarmTopic(prefix, env);
+    this.createDLQAlarm(prefix, env, dlq, dlqAlarmTopic);
+
     return trainingQueue;
   }
 
@@ -274,5 +281,47 @@ export class SharedInfraStack extends Stack {
     });
 
     return { bastion, bastionSg };
+  }
+
+  private createDLQAlarmTopic(prefix: string, env: string): Topic {
+    const topic = new Topic(this, `${prefix}DLQAlarmTopic-${env}`, {
+      displayName: `Training DLQ Alerts - ${env}`,
+      topicName: `training-dlq-alerts-${env}`,
+    });
+
+    new CfnOutput(this, `${prefix}DLQAlarmTopicArn-${env}`, {
+      value: topic.topicArn,
+      description: 'SNS Topic ARN for Training DLQ alerts',
+      exportName: `training-dlq-alarm-topic-arn-${env}`,
+    });
+
+    return topic;
+  }
+
+  private createDLQAlarm(prefix: string, env: string, dlq: Queue, alarmTopic: Topic): void {
+    const alarm = new Alarm(this, `${prefix}TrainingDLQAlarm-${env}`, {
+      alarmName: `training-dlq-messages-${env}`,
+      alarmDescription: 'Alert when Training DLQ has more than 3 messages',
+      metric: new Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfVisibleMessages',
+        dimensionsMap: {
+          QueueName: dlq.queueName,
+        },
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: 3,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+
+    alarm.addAlarmAction(new SnsAction(alarmTopic));
+
+    new CfnOutput(this, `${prefix}DLQAlarmName-${env}`, {
+      value: alarm.alarmName,
+      description: 'CloudWatch alarm name for Training DLQ monitoring',
+    });
   }
 }
