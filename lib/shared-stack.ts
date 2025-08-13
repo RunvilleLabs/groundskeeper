@@ -49,7 +49,6 @@ export class SharedInfraStack extends Stack {
   public readonly vpc: Vpc;
   public readonly dbSecret: Secret;
   public readonly trainingQueue: Queue;
-  public trainingDLQ!: Queue;
   public readonly userPicsBucket: Bucket;
   public readonly fitDataBucket: Bucket;
   public readonly codeBucket: Bucket;
@@ -59,7 +58,6 @@ export class SharedInfraStack extends Stack {
   public readonly albSg: SecurityGroup;
   public readonly dbInstance: DatabaseInstance;
   public readonly bastion: BastionHostLinux;
-  public dlqAlarmTopic!: Topic;
   constructor(scope: Construct, id: string, props: SharedInfraStackProps) {
     super(scope, id, props);
     const { envName } = props;
@@ -244,11 +242,9 @@ export class SharedInfraStack extends Stack {
       ...overrides,
     });
 
-    this.trainingDLQ = dlq;
-
     // Create DLQ monitoring
-    this.dlqAlarmTopic = this.createDLQAlarmTopic(prefix, env);
-    this.createDLQAlarm(prefix, env, dlq, this.dlqAlarmTopic);
+    const dlqAlarmTopic = this.createDLQAlarmTopic(prefix, env);
+    this.createDLQAlarm(prefix, env, dlq, dlqAlarmTopic);
 
     return trainingQueue;
   }
