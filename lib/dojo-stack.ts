@@ -42,6 +42,12 @@ export class DojoStack extends Stack {
     props: DojoStackProps,
     logGroup: LogGroup
   ): Function {
+    const usainAppSecret = Secret.fromSecretNameV2(
+      this,
+      "UsainAppSecret",
+      `UsainAppSecret-${props.envName}`
+    );
+
     const fn = new Function(this, `${prefix}-${props.envName}`, {
       runtime: Runtime.NODEJS_18_X,
       code: Code.fromBucket(props.codeBucket, "dojo-worker.zip"),
@@ -54,12 +60,14 @@ export class DojoStack extends Stack {
       environment: {
         QUEUE_URL: props.queue.queueUrl,
         DB_SECRET_ARN: props.dbSecret.secretArn,
+        USAIN_BASE_URL: usainAppSecret.secretValueFromJson("USAIN_BASE_URL").toString(),
       },
     });
 
     fn.addEventSource(new SqsEventSource(props.queue, { batchSize: 5 }));
     props.queue.grantConsumeMessages(fn);
     props.dbSecret.grantRead(fn);
+    usainAppSecret.grantRead(fn);
     logGroup.grantWrite(fn);
 
     return fn;
