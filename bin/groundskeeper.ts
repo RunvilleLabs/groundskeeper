@@ -25,6 +25,7 @@ new DojoStack(app, `DojoStack-${envName}`, {
   dbSecret: shared.dbSecret,
   lambdaSg: shared.lambdaSg,
   codeBucket: shared.codeBucket,
+  appSecretName: `UsainAppSecret-${envName}`,
   env,
 });
 

@@ -22,12 +22,13 @@ export interface DojoStackProps extends StackProps {
   dbSecret: Secret;
   lambdaSg: SecurityGroup;
   codeBucket: Bucket;
+  appSecretName: string;
 }
 
 export class DojoStack extends Stack {
   constructor(scope: Construct, id: string, props: DojoStackProps) {
     super(scope, id, props);
-  
+
     const logGroup = this.createLogGroup("Dojo", props.envName);
     const worker = this.createLambda("DojoWorker", props, logGroup);
 
@@ -45,7 +46,7 @@ export class DojoStack extends Stack {
     const usainAppSecret = Secret.fromSecretNameV2(
       this,
       "UsainAppSecret",
-      `UsainAppSecret-${props.envName}`
+      props.appSecretName
     );
 
     const fn = new Function(this, `${prefix}-${props.envName}`, {
