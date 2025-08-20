@@ -37,18 +37,20 @@ export interface UsainStackProps extends StackProps {
 }
 
 export class UsainStack extends Stack {
+  public readonly appSecret: Secret;
+  
   constructor(scope: Construct, id: string, props: UsainStackProps) {
     super(scope, id, props);
     const { envName } = props;
     const prefix = "Usain";
 
     // ECS Cluster
-    const appSecret = this.createAppSecret(prefix, envName);
+    this.appSecret = this.createAppSecret(prefix, envName);
     const cluster = this.createCluster(prefix, envName, props.vpc);
     const repo = this.createRepo(prefix, envName);
     const logGroup = this.createLogGroup(prefix, envName);
-    const taskDef = this.createTaskDef(prefix, envName, repo,logGroup, props, appSecret);
-    const svc = this.createService(prefix, envName, cluster, taskDef, props, appSecret);
+    const taskDef = this.createTaskDef(prefix, envName, repo,logGroup, props, this.appSecret);
+    const svc = this.createService(prefix, envName, cluster, taskDef, props, this.appSecret);
     this.attachAlb(prefix, envName, svc, props);
   }
 

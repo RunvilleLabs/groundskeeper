@@ -22,12 +22,13 @@ export interface DojoStackProps extends StackProps {
   dbSecret: Secret;
   lambdaSg: SecurityGroup;
   codeBucket: Bucket;
+  appSecret: Secret;
 }
 
 export class DojoStack extends Stack {
   constructor(scope: Construct, id: string, props: DojoStackProps) {
     super(scope, id, props);
-  
+
     const logGroup = this.createLogGroup("Dojo", props.envName);
     const worker = this.createLambda("DojoWorker", props, logGroup);
 
@@ -42,6 +43,8 @@ export class DojoStack extends Stack {
     props: DojoStackProps,
     logGroup: LogGroup
   ): Function {
+    const usainAppSecret = props.appSecret;
+
     const fn = new Function(this, `${prefix}-${props.envName}`, {
       runtime: Runtime.NODEJS_18_X,
       code: Code.fromBucket(props.codeBucket, "dojo-worker.zip"),
@@ -54,12 +57,14 @@ export class DojoStack extends Stack {
       environment: {
         QUEUE_URL: props.queue.queueUrl,
         DB_SECRET_ARN: props.dbSecret.secretArn,
+        USAIN_BASE_URL: usainAppSecret.secretValueFromJson("USAIN_BASE_URL").toString(),
       },
     });
 
     fn.addEventSource(new SqsEventSource(props.queue, { batchSize: 5 }));
     props.queue.grantConsumeMessages(fn);
     props.dbSecret.grantRead(fn);
+    usainAppSecret.grantRead(fn);
     logGroup.grantWrite(fn);
 
     return fn;
