@@ -104,10 +104,14 @@ export class UsainStack extends Stack {
         FIT_S3_BUCKET_NAME: props.fitDataBucket.bucketName,
         AWS_REGION: props.env?.region || 'eu-central-1',
         IS_ALLOW_LIST_ENABLED: 'false',
+        POSTGRES_DB: "postgres",
       },
       secrets: {
-        POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret),
-        POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret),
+        POSTGRES_ARN: ecs.Secret.fromSecretsManager(props.dbSecret),
+        POSTGRES_HOST: ecs.Secret.fromSecretsManager(props.dbSecret, "host"),
+        POSTGRES_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
+        POSTGRES_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret, "password"),
+        POSTGRES_PORT: ecs.Secret.fromSecretsManager(props.dbSecret, "port"),
         JWT_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_SECRET"),
         JWT_REFRESH_SECRET: ecs.Secret.fromSecretsManager(appSecret, "JWT_REFRESH_SECRET"),
         GOOGLE_WEB_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecret, "GOOGLE_WEB_CLIENT_ID"),
@@ -127,6 +131,9 @@ export class UsainStack extends Stack {
         TELEGRAM_BOT_TOKEN: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_BOT_TOKEN"),
         TELEGRAM_SECRET: ecs.Secret.fromSecretsManager(appSecret, "TELEGRAM_SECRET"),
       },
+      command: ['sh','-lc',
+        'export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?schema=public"; exec node dist/main.js'
+      ],
     });
 
     return td;
@@ -143,7 +150,7 @@ export class UsainStack extends Stack {
     const service = new FargateService(this, `${prefix}Service-${env}`, {
       cluster,
       taskDefinition: taskDef,
-      desiredCount: 0,
+      desiredCount: 1,
       assignPublicIp: false,
       securityGroups: [props.appSg],
       circuitBreaker: { rollback: true },
