@@ -22,7 +22,7 @@ export interface DojoStackProps extends StackProps {
   dbSecret: Secret;
   lambdaSg: SecurityGroup;
   codeBucket: Bucket;
-  appSecretName: string;
+  appSecret: Secret;
 }
 
 export class DojoStack extends Stack {
@@ -43,11 +43,7 @@ export class DojoStack extends Stack {
     props: DojoStackProps,
     logGroup: LogGroup
   ): Function {
-    const usainAppSecret = Secret.fromSecretNameV2(
-      this,
-      "UsainAppSecret",
-      props.appSecretName
-    );
+    const usainAppSecret = props.appSecret;
 
     const fn = new Function(this, `${prefix}-${props.envName}`, {
       runtime: Runtime.NODEJS_18_X,

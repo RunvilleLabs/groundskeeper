@@ -17,20 +17,8 @@ const shared = new SharedInfraStack(app, `SharedInfra-${envName}`, {
   env,
 });
 
-// ── Dojo (Lambda) stack ───────────────────────────────────────
-new DojoStack(app, `DojoStack-${envName}`, {
-  envName,
-  vpc: shared.vpc,
-  queue: shared.trainingQueue,
-  dbSecret: shared.dbSecret,
-  lambdaSg: shared.lambdaSg,
-  codeBucket: shared.codeBucket,
-  appSecretName: `UsainAppSecret-${envName}`,
-  env,
-});
-
 // ── Usain (ECS) stack ─────────────────────────────────
-new UsainStack(app, `UsainStack-${envName}`, {
+const usainStack = new UsainStack(app, `UsainStack-${envName}`, {
   envName,
   vpc: shared.vpc,
   queue: shared.trainingQueue,
@@ -40,5 +28,17 @@ new UsainStack(app, `UsainStack-${envName}`, {
   appSg: shared.appSg,
   albSg: shared.albSg,
   dbInstance: shared.dbInstance,
+  env,
+});
+
+// ── Dojo (Lambda) stack ───────────────────────────────────────
+new DojoStack(app, `DojoStack-${envName}`, {
+  envName,
+  vpc: shared.vpc,
+  queue: shared.trainingQueue,
+  dbSecret: shared.dbSecret,
+  lambdaSg: shared.lambdaSg,
+  codeBucket: shared.codeBucket,
+  appSecret: usainStack.appSecret,
   env,
 });
