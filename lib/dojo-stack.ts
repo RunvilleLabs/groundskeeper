@@ -1,4 +1,4 @@
-import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Code, Function, Runtime, FunctionUrlAuthType, InvokeMode } from "aws-cdk-lib/aws-lambda";
 import {
   Duration,
   Stack,
@@ -30,6 +30,18 @@ export class DojoStack extends Stack {
   
     const logGroup = this.createLogGroup("Dojo", props.envName);
     const worker = this.createLambda("DojoWorker", props, logGroup);
+
+    const streamingAgent = new Function(this, `StreamingAgent-${props.envName}`, {
+      runtime: Runtime.NODEJS_22_X,
+      code: Code.fromBucket(props.codeBucket, "streaming-agent.zip"),
+      handler: "dist/agent-handler.handler",
+      memorySize: 1024,
+    });
+
+    streamingAgent.addFunctionUrl({
+      authType: FunctionUrlAuthType.AWS_IAM,
+      invokeMode: InvokeMode.RESPONSE_STREAM,
+    });
 
     new events.Rule(this, "DojoCleanupCron", {
       schedule: events.Schedule.cron({ minute: "0", hour: "2" }),
